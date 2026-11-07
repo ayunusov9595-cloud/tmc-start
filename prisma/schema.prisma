@@ -1,0 +1,490 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("STUDENT") // STUDENT, ADMIN
+  status       String   @default("ACTIVE")  // ACTIVE, SUSPENDED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile       Profile?
+  cvDocuments   CvDocument[]
+  cvReviews     CvReview[]
+  careerSessions CareerSession[]
+  projects      Project[]
+  joinRequests  JoinRequest[]
+  invitations   Invitation[]
+  memberships   Membership[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  moderationReports ModerationReport[]
+  voiceJobs     VoiceJob[]
+}
+
+// ============================================================
+// STUDENT PROFILE (shared, reusable)
+// ============================================================
+
+model Profile {
+  id        String @id @default(uuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal
+  fullName  String
+  phone     String?
+  photoUrl  String?
+  city      String?
+  bio       String? // short professional introduction
+
+  // Education
+  institution     String?
+  studyField      String?
+  qualification   String? // Bachelor, Master, PhD, College
+  courseYear       Int?
+  graduationStatus String? // STUDYING, GRADUATED, GAP_YEAR
+
+  // Relevant subjects
+  relevantSubjects String? // JSON array
+
+  // Career preferences
+  careerInterests    String? // JSON array
+  preferredWorkFormat String? // REMOTE, HYBRID, ONSITE, ANY
+  availability       String? // IMMEDIATE, PART_TIME, FULL_TIME, SUMMER
+
+  // Portfolio links
+  linkedinUrl  String?
+  githubUrl    String?
+  portfolioUrl String?
+
+  // Privacy
+  publicBio      Boolean @default(true)
+  publicSkills   Boolean @default(true)
+  publicProjects Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills        ProfileSkill[]
+  languages     ProfileLanguage[]
+  experiences   Experience[]
+  educations    Education[]
+  certificates  Certificate[]
+  profileProjects ProfileProject[]
+}
+
+model ProfileSkill {
+  id         String  @id @default(uuid())
+  profileId  String
+  profile    Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name       String
+  category   String? // Technical, Tool, Framework, Soft Skill
+  description String? // concrete description
+  proficiency String @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED, EXPERT
+
+  @@index([profileId])
+}
+
+model ProfileLanguage {
+  id          String  @id @default(uuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language    String
+  proficiency String  @default("B1") // A1, A2, B1, B2, C1, C2, NATIVE
+
+  @@index([profileId])
+}
+
+model Experience {
+  id          String  @id @default(uuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  category    String  // EMPLOYMENT, INTERNSHIP, VOLUNTEERING
+  title       String
+  organization String
+  startDate   String
+  endDate     String? // null = current
+  description String?
+  sortOrder   Int     @default(0)
+
+  @@index([profileId])
+}
+
+model Education {
+  id           String  @id @default(uuid())
+  profileId    String
+  profile      Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  institution  String
+  degree       String
+  fieldOfStudy String
+  startYear    Int
+  endYear      Int?
+  description  String?
+  sortOrder    Int     @default(0)
+
+  @@index([profileId])
+}
+
+model Certificate {
+  id          String  @id @default(uuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  issuer      String?
+  date        String?
+  url         String?
+  category    String  @default("CERTIFICATE") // CERTIFICATE, ACHIEVEMENT, AWARD
+  sortOrder   Int     @default(0)
+
+  @@index([profileId])
+}
+
+model ProfileProject {
+  id          String  @id @default(uuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  url         String?
+  technologies String? // JSON array
+  category    String   @default("EDUCATIONAL") // EDUCATIONAL, PERSONAL, FREELANCE
+  sortOrder   Int      @default(0)
+
+  @@index([profileId])
+}
+
+// ============================================================
+// CV BUILDER
+// ============================================================
+
+model CvTemplate {
+  id          String  @id @default(uuid())
+  name        String
+  family      String  // minimal, academic, corporate, creative, internship, graduate
+  variant     String  @default("default") // color/style variant
+  description String?
+  previewUrl  String?
+  layoutConfig String // JSON: columns, sections, fonts, colors
+  isPublished Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cvDocuments CvDocument[]
+
+  @@index([family])
+  @@index([isPublished])
+}
+
+model CvDocument {
+  id         String  @id @default(uuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId String?
+  template   CvTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  title      String  @default("Yangi CV")
+  status     String  @default("DRAFT") // DRAFT, COMPLETED
+  isFavorite Boolean @default(false)
+
+  // Structured CV data (JSON)
+  personalInfo String? // JSON: name, email, phone, city, photo
+  summary      String? // professional summary text
+  educationData    String? // JSON array
+  experienceData   String? // JSON array
+  projectsData     String? // JSON array
+  skillsData       String? // JSON array
+  languagesData    String? // JSON array
+  certificatesData String? // JSON array
+
+  // Upload info (for uploaded CVs)
+  uploadedFileName String?
+  uploadedFileKey  String?
+  uploadedFileSize Int?
+  uploadedFileType String?
+  extractedText    String?
+
+  lastAutoSavedAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  reviews CvReview[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================================
+// AI CV REVIEW
+// ============================================================
+
+model CvReview {
+  id          String  @id @default(uuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvDocumentId String
+  cvDocument  CvDocument @relation(fields: [cvDocumentId], references: [id], onDelete: Cascade)
+
+  targetRole   String? // optional target role
+  vacancyText  String? // optional vacancy text
+
+  status       String @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  
+  // Review results (JSON)
+  overviewText  String?
+  strengthsJson String? // JSON array
+  suggestionsJson String? // JSON array of { section, passage, issue, suggestion, status }
+  
+  cvContentHash String? // to detect if CV changed after review
+  errorMessage  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([cvDocumentId])
+}
+
+// ============================================================
+// CAREER GUIDANCE
+// ============================================================
+
+model CareerSession {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  inputType    String // BIOGRAPHY, PROFILE, CV
+  inputText    String? // biography text or extracted CV text
+  cvDocumentId String?
+  
+  status String @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+
+  // Recommendations (JSON array)
+  recommendationsJson String?
+  errorMessage        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ============================================================
+// VOICE JOBS
+// ============================================================
+
+model VoiceJob {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  audioFileKey  String
+  audioFileSize Int
+  audioFormat   String
+  audioDuration Float? // seconds
+
+  status     String @default("PENDING") // PENDING, TRANSCRIBING, EXTRACTING, COMPLETED, FAILED
+  
+  transcript     String?
+  extractedFields String? // JSON of proposed profile/CV fields
+  errorMessage   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ============================================================
+// PROJECTS & TEAMS
+// ============================================================
+
+model Project {
+  id          String @id @default(uuid())
+  ownerId     String
+  owner       User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String
+  problem     String?
+  outcome     String?
+  category    String? // STARTUP, INNOVATION, RESEARCH, SOCIAL, HACKATHON
+  stage       String  @default("IDEA") // IDEA, PLANNING, MVP, ACTIVE, COMPLETED
+
+  weeklyHours    Int?
+  durationWeeks  Int?
+  workFormat     String @default("ANY") // REMOTE, HYBRID, ONSITE, ANY
+  location       String?
+  compensation   String? // description of compensation expectations
+
+  status      String @default("DRAFT") // DRAFT, PUBLISHED, CLOSED, ARCHIVED
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles        ProjectRole[]
+  joinRequests JoinRequest[]
+  invitations  Invitation[]
+  memberships  Membership[]
+  reports      ModerationReport[]
+
+  @@index([status])
+  @@index([category])
+}
+
+model ProjectRole {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  skillsNeeded String? // JSON array
+  maxPlaces   Int     @default(1)
+  filledPlaces Int    @default(0)
+
+  @@index([projectId])
+}
+
+model JoinRequest {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roleId       String?
+  introduction String?
+  status       String @default("PENDING") // PENDING, ACCEPTED, REJECTED, WITHDRAWN
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Invitation {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  roleId    String?
+  message   String?
+  status    String  @default("PENDING") // PENDING, ACCEPTED, REJECTED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Membership {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role      String  // role title within the project
+  isOwner   Boolean @default(false)
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id      String  @id @default(uuid())
+  userId  String
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title   String
+  message String
+  link    String?
+  type    String  @default("SYSTEM") // PROJECT_REQUEST, PROJECT_ACCEPTED, CV_REVIEW, CAREER, SYSTEM
+  isRead  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+// ============================================================
+// MODERATION
+// ============================================================
+
+model ModerationReport {
+  id         String  @id @default(uuid())
+  reporterId String
+  reporter   User    @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  reason     String
+  details    String?
+  status     String  @default("PENDING") // PENDING, REVIEWED, RESOLVED, DISMISSED
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ============================================================
+// ADMIN & REFERENCE DATA
+// ============================================================
+
+model RoleReference {
+  id          String @id @default(uuid())
+  title       String @unique
+  category    String // IT, FINANCE, MARKETING, EDUCATION, ENGINEERING, etc.
+  description String?
+  isActive    Boolean @default(true)
+}
+
+model OrganizationType {
+  id          String @id @default(uuid())
+  name        String @unique
+  description String?
+  isActive    Boolean @default(true)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String
+  details    String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType, entityId])
+}

@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fefcfb;
+  --foreground: #1a1a2e;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid #ab2249;
+  outline-offset: 2px;
+}
+
+/* Scrollbar */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Print styles for PDF */
+@media print {
+  body { margin: 0; padding: 0; }
+  .no-print { display: none !important; }
+}
